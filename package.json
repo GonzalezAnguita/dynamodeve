@@ -1,10 +1,10 @@
 {
-  "name": "dynamodeljs",
+  "name": "dynamodeve",
   "author": "José Tomás González",
   "license": "MIT",
   "version": "1.0.0",
   "description": "Dynamodb wrapper to simplify the use of the AWS SDK",
-  "repository": "https://github.com/GonzalezAnguita/dynamodeljs",
+  "repository": "https://github.com/GonzalezAnguita/dynamodeve",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [

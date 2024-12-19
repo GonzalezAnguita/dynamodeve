@@ -1,10 +1,10 @@
-# Dynamodel
+# Dynamodeve
 
 An easier method to use AWS DynamoDB. It handles index generation but giving you more control to declare indexes and query patterns.
 
 ## Install
 ```bash
-npm install dynamodeljs
+npm install dynamodev
 ```
 
 ## Setup
