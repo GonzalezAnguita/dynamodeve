@@ -793,7 +793,7 @@ export function replaceFieldWithValue(
 export function removeIndexProperties(resource: Document, indexFieldsMap: IndexFieldsMap): Document {
     const forbiddenFields = Object.keys(indexFieldsMap);
 
-    return Object.fromEntries(Object.entries(resource).filter(([key]) => forbiddenFields.includes(key)));
+    return Object.fromEntries(Object.entries(resource).filter(([key]) => !forbiddenFields.includes(key)));
 }
 
 /**
