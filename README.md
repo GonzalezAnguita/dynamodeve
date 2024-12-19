@@ -1,68 +1,178 @@
-# Lombda
-This is a POC that lets you simulate an api gateway lambda proxy integration using an alternative server framework. For the moment only [Express.js](https://expressjs.com) is supported.
+# Dynamodel
 
-The library transforms the incoming request object to the payload that api gateway sends to the lambda when configured as Lambda Proxy Integration, more details can be found [here](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html#http-api-develop-integrations-lambda.v2). It also supports lambda authorizer.
+An easier method to use AWS DynamoDB. It handles index generation but giving you more control to declare indexes and query patterns.
 
-### Setup
-Lombda requires that you define the routes that your lambdas will be mapped to. To start you must install lombda package.
-
+## Install
 ```bash
-    npm i lombda
+npm install dynamodeljs
 ```
 
-If you have environment variables
-```bash
-    npm i dotenv
-```
-and create an `.env` file with your variables
+## Setup
 
-```javascript
-// lombda.js
+1. Declare your table configuration
 
-const dotenv = require('dotenv');
-const Lombda = require('lombda').default;
+```typescript
+// db_config.ts
 
-dotenv.config();
+const TABLE_NAME = 'main';
 
-Lombda.express([
-    {
-        lambdaIndex: 'path/to/public/lambda/dist/index.js',
-        lambdaHandler: 'handler',
-        routeKey: 'POST /public-lambda',
-    },
-    {
-        lambdaIndex: 'path/to/authorized/lambda/index.js',
-        lambdaHandler: 'handler',
-        routeKey: 'GET /authorized-lambda',
-        authorizer: {
-            lambdaIndex: 'path/to/authorizer/dist/index.js',
-            lambdaHandler: 'handler',
-        },
-    },
-], {
-    basePath: __dirname,
-    port: 3002,
-});
+export const PRIMARY_INDEX_CONFIG = {
+    tableName: TABLE_NAME,
+    indexName: null,
+    partitionKey: 'PK',
+    sortKey: 'SK',
+} as const;
+
+export const GSI1_CONFIG = {
+    tableName: TABLE_NAME,
+    indexName: 'GSI1',
+    partitionKey: 'GSI1PK',
+    sortKey: 'GSI1SK',
+} as const;
+
+export const GSI2_CONFIG = {
+    tableName: TABLE_NAME,
+    indexName: 'GSI2',
+    partitionKey: 'GSI2PK',
+    sortKey: 'GSI2SK',
+} as const;
+
 ```
 
-### CORS
+2. Create a model using the configuration
 
-You can add to your config
+```typescript
+// user.ts
 
-```javascript
-{
-    basePath: __dirname,
-    ...,
-    cors: {
-        'Access-Control-Allow-Origin': string,
-        'Access-Control-Allow-Headers': string,
-        'Access-Control-Allow-Methods': string,
-    }
+type User = {
+    givenName: string;
+    lastName: string;
+    email: string;
+    nationalId: string;
 }
 ```
 
-To run it just execute
+Declare your model entity name
+```typescript
+const ENTITY_NAME = 'User';
+```
 
-```bash
-    node lombda.js
+Declare your model index configuration, for this step you can use curly braces as template fields for the lib to generate your indexes
+```typescript
+// user.ts
+
+const INDEX_FIELDS_MAP: IndexFieldsMap = {
+    [PRIMARY_INDEX_CONFIG.partitionKey]: [ENTITY_NAME, '{id}'],
+    [PRIMARY_INDEX_CONFIG.sortKey]: [ENTITY_NAME],
+    [GSI1_CONFIG.partitionKey]: [ENTITY_NAME],
+    [GSI1_CONFIG.sortKey]: [ENTITY_NAME, '{email}'],
+    [GSI2_CONFIG.partitionKey]: [ENTITY_NAME],
+    [GSI2_CONFIG.sortKey]: [ENTITY_NAME, '{nationalId}'],
+};
+```
+
+After index generation the above will generate indexes like
+```typescript
+PK: User#937c1e16-cb48-454d-825b-7398ab990d91
+SK: User
+
+GSI1PK: User
+GSI1SK: User#some@email.com
+
+GSI2PK: User
+GSI2SK: User#13812718
+```
+
+The next step is to declare your wrapper model
+```typescript
+// user.ts
+
+export class Handler extends DbModel<Entity> {
+    constructor(pkPrefix: string) {
+        super(pkPrefix, ENTITY_NAME, PRIMARY_INDEX_CONFIG, INDEX_FIELDS_MAP);
+    }
+
+    // Primary Access patterns
+
+    public async findOneById(id: string): Promise<Entity | null> {
+        return this.queryOne({ id }, PRIMARY_INDEX_CONFIG, { skMatch: 'exact' });
+    }
+
+    // GSI1 Access patterns
+
+    public async find(config: PaginationConfig = {}): Promise<PaginatedDbResult<Entity[]>> {
+        return await this.query({}, GSI1_CONFIG, { ...config, skMatch: 'begins_with' });
+    }
+
+    public async findOneByEmail(email: string): Promise<Entity | null> {
+        return this.queryOne({ email }, GSI1_CONFIG, { skMatch: 'exact' });
+    }
+
+    // GSI2 Access patterns
+
+    public async findOneByNationalId(nationalId: string): Promise<Entity | null> {
+        return this.queryOne({ nationalId }, GSI2_CONFIG, { skMatch: 'exact' });
+    }
+
+    // CRUD operations
+
+    public async createOne(input: WithoutDefaults<Entity>): Promise<Entity> {
+        const { id } = this.trxInsertOne(input);
+
+        this.trxInsertUniqueConstraint([input.email]);
+
+        if (input.nationalId) {
+            this.trxInsertUniqueConstraint([input.nationalId]);
+        }
+
+        await this.trxExecute();
+
+        const createdResource = await this.findOneById(id);
+        if (createdResource === null) {
+            throw new Error('Failed to find resource after create');
+        }
+
+        return createdResource;
+    }
+
+    public async updateOne(id: string, input: Partial<WithoutDefaults<Entity>>, filter: Partial<Entity> = {}): Promise<Entity | null> {
+        const resource = await this.findOneById(id);
+        if (resource === null) return null;
+
+        this.trxUpdateOne(input, resource, filter);
+
+        if (input.email && input.email !== resource.email) {
+            this.trxRemoveUniqueConstraint([resource.email]);
+            this.trxInsertUniqueConstraint([input.email]);
+        }
+
+        if (input.nationalId && input.nationalId !== resource.nationalId) {
+            if (resource.nationalId) {
+                this.trxRemoveUniqueConstraint([resource.nationalId]);
+            }
+            this.trxInsertUniqueConstraint([input.nationalId]);
+        }
+
+        await this.trxExecute();
+
+        return this.findOneById(id);
+    }
+
+    public async deleteOne(id: string, filter: Partial<Entity> = {}): Promise<Entity | null> {
+        const resource = await this.findOneById(id);
+        if (resource === null) return null;
+
+        this.trxDeleteOne(resource, filter);
+
+        this.trxRemoveUniqueConstraint([resource.email]);
+
+        if (resource.nationalId !== undefined) {
+            this.trxRemoveUniqueConstraint([resource.nationalId]);
+        }
+
+        await this.trxExecute();
+
+        return resource;
+    }
+}
 ```
