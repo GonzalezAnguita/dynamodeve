@@ -1,10 +1,10 @@
 {
-  "name": "dynamoose",
+  "name": "dynamodeljs",
   "author": "José Tomás González",
   "license": "MIT",
   "version": "1.0.0",
   "description": "Dynamodb wrapper to simplify the use of the AWS SDK",
-  "repository": "https://github.com/GonzalezAnguita/dynamoose",
+  "repository": "https://github.com/GonzalezAnguita/dynamodeljs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
