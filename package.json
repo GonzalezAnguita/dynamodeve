@@ -1,0 +1,27 @@
+{
+  "name": "dynamoose",
+  "author": "José Tomás González",
+  "license": "MIT",
+  "version": "1.0.0",
+  "description": "Dynamodb wrapper to simplify the use of the AWS SDK",
+  "repository": "https://github.com/GonzalezAnguita/dynamoose",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "./dist/**/*"
+  ],
+  "scripts": {
+    "build": "npx tsc",
+    "publish": "npm publish --access public",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.714.0",
+    "@aws-sdk/util-dynamodb": "^3.714.0",
+    "uuid": "^11.0.3"
+  }
+}
