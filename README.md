@@ -4,7 +4,7 @@ An easier method to use AWS DynamoDB. It handles index generation but giving you
 
 ## Install
 ```bash
-npm install dynamodev
+npm install dynamodeve
 ```
 
 ## Setup
