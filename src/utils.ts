@@ -585,7 +585,7 @@ const RESERVED_KEYWORDS = [
     'ZONE',
 ];
 
-const RESERVED_KEYWORD_PREFIX = '#reserved_';
+const RESERVED_KEYWORD_PREFIX = 'reserved_';
 
 /**
  * Check if a key is a reserved keyword
@@ -613,11 +613,11 @@ export function unmarshallReservedKeys(data: Record<string, AttributeValue>): Re
  * Get the expression attribute names for a payload
  * @param payload The payload to get the expression attribute names for
  */
-export function getExpressionAttributeNames(payload: Record<string, unknown>, prefix = '#'): Record<string, string> | undefined {
+export function getExpressionAttributeNames(payload: Record<string, unknown>, prefix = ''): Record<string, string> | undefined {
     const attributeNames = Object.entries(payload).reduce<Record<string, string>>((acc, [key, value]) => {
         if (value === undefined) return acc;
 
-        const mappedKey = isReservedKey(key) ? `${RESERVED_KEYWORD_PREFIX}${key}` : `${prefix}${key}`;
+        const mappedKey = isReservedKey(key) ? `#${prefix}${RESERVED_KEYWORD_PREFIX}${key}` : `#${prefix}${key}`;
 
         acc[mappedKey] = key;
 
@@ -633,11 +633,11 @@ export function getExpressionAttributeNames(payload: Record<string, unknown>, pr
  * Get the expression attribute values for a payload
  * @param payload The payload to get the expression attribute values for
  */
-export function getExpressionAttributeValues(payload: Record<string, unknown>, prefix = ':'): Record<string, AttributeValue> | undefined {
+export function getExpressionAttributeValues(payload: Record<string, unknown>, prefix = ''): Record<string, AttributeValue> | undefined {
     const attributeValues = Object.entries(payload).reduce<Record<string, AttributeValue>>((acc, [key, value]) => {
         if (value === undefined) return acc;
 
-        acc[`${prefix}${key}`] = marshall(value, { convertTopLevelContainer: true, removeUndefinedValues: true });
+        acc[`:${prefix}${key}`] = marshall(value, { convertTopLevelContainer: true, removeUndefinedValues: true });
 
         return acc;
     }, {});
@@ -651,17 +651,17 @@ export function getExpressionAttributeValues(payload: Record<string, unknown>, p
  * Get the update expression for a payload
  * @param payload The payload to get the update expression for
  */
-export function getUpdateExpression(payload: Record<string, unknown>, keyPrefix = '#', valuePrefix = ':'): string | undefined {
+export function getUpdateExpression(payload: Record<string, unknown>, keyPrefix = '', valuePrefix = ''): string | undefined {
     const expression = Object.entries(payload).reduce<string>((acc, [key, value], index) => {
         if (value === undefined) return acc;
 
-        const mappedKey = isReservedKey(key) ? `${RESERVED_KEYWORD_PREFIX}${key}` : `${keyPrefix}${key}`;
+        const mappedKey = isReservedKey(key) ? `#${keyPrefix}${RESERVED_KEYWORD_PREFIX}${key}` : `#${keyPrefix}${key}`;
 
         if (index === 0) {
-            return `SET ${mappedKey} = ${valuePrefix}${key}`;
+            return `SET ${mappedKey} = :${valuePrefix}${key}`;
         }
 
-        return `${acc}, ${mappedKey} = ${valuePrefix}${key}`;
+        return `${acc}, ${mappedKey} = :${valuePrefix}${key}`;
     }, '');
 
     if (expression === '') return undefined;
@@ -673,17 +673,17 @@ export function getUpdateExpression(payload: Record<string, unknown>, keyPrefix 
  * Get the condition expression for a payload
  * @param payload The payload to get the condition expression for
  */
-export function getConditionExpression(payload: Record<string, unknown>, keyPrefix = '#', valuePrefix = ':'): string | undefined {
+export function getConditionExpression(payload: Record<string, unknown>, keyPrefix = '', valuePrefix = ''): string | undefined {
     const expression = Object.entries(payload).reduce<string>((acc, [key, value], index) => {
         if (value === undefined) return acc;
 
-        const mappedKey = isReservedKey(key) ? `${RESERVED_KEYWORD_PREFIX}${key}` : `${keyPrefix}${key}`;
+        const mappedKey = isReservedKey(key) ? `#${keyPrefix}${RESERVED_KEYWORD_PREFIX}${key}` : `#${keyPrefix}${key}`;
 
         if (index === 0) {
-            return `${mappedKey} = ${valuePrefix}${key}`;
+            return `${mappedKey} = :${valuePrefix}${key}`;
         }
 
-        return `${acc} AND ${mappedKey} = ${valuePrefix}${key}`;
+        return `${acc} AND ${mappedKey} = :${valuePrefix}${key}`;
     }, '');
 
     if (expression === '') return undefined;
@@ -700,27 +700,27 @@ export function getConditionExpression(payload: Record<string, unknown>, keyPref
 export function getKeyConditionExpression(
     queryIndex: DbIndex,
     skMatch: SkMatch,
-    valuePrefix = ':',
+    valuePrefix = '',
 ): string {
     let keyConditionExpression;
     switch (skMatch) {
         case 'exact':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND ${queryIndex.sortKey} = ${valuePrefix}sk`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND ${queryIndex.sortKey} = :${valuePrefix}sk`;
             break;
         case 'begins_with':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND begins_with(${queryIndex.sortKey}, ${valuePrefix}sk)`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND begins_with(${queryIndex.sortKey}, :${valuePrefix}sk)`;
             break;
         case 'greater_than':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND ${queryIndex.sortKey} > ${valuePrefix}sk`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND ${queryIndex.sortKey} > :${valuePrefix}sk`;
             break;
         case 'less_than':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND ${queryIndex.sortKey} < ${valuePrefix}sk`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND ${queryIndex.sortKey} < :${valuePrefix}sk`;
             break;
         case 'greater_than_or_equal':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND ${queryIndex.sortKey} >= ${valuePrefix}sk`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND ${queryIndex.sortKey} >= :${valuePrefix}sk`;
             break;
         case 'less_than_or_equal':
-            keyConditionExpression = `${queryIndex.partitionKey} = ${valuePrefix}pk AND ${queryIndex.sortKey} <= ${valuePrefix}sk`;
+            keyConditionExpression = `${queryIndex.partitionKey} = :${valuePrefix}pk AND ${queryIndex.sortKey} <= :${valuePrefix}sk`;
             break;
         default:
             throw new Error(`Invalid match type ${skMatch}`);

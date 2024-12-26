@@ -245,10 +245,10 @@ export abstract class DbModel<T extends Document> {
         const updateExpressionNames = DbUtils.getExpressionAttributeNames(updateData);
         const updateExpressionValues = DbUtils.getExpressionAttributeValues(updateData);
 
-        // Changed prefixes "fn:" and "fv:" to avoid conflicts with the update expression
-        const filterExpression = DbUtils.getConditionExpression(filter, 'fn:', 'fv:');
-        const filterExpressionNames = DbUtils.getExpressionAttributeNames(filter, 'fn:');
-        const filterExpressionValues = DbUtils.getExpressionAttributeValues(filter, 'fv:');
+        // Changed prefixes "fn" and "fv" to avoid conflicts with the update expression
+        const filterExpression = DbUtils.getConditionExpression(filter, 'fn', 'fv');
+        const filterExpressionNames = DbUtils.getExpressionAttributeNames(filter, 'fn');
+        const filterExpressionValues = DbUtils.getExpressionAttributeValues(filter, 'fv');
 
         const expressionAttributeNames = {
             ...updateExpressionNames,
