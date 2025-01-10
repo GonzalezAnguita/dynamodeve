@@ -48,7 +48,8 @@ export abstract class DbModel<T extends Document> {
      * @param index The index of the transaction item
      * @param payload The error payload
      */
-    private trxSetErrorHandler(reason: 'ConditionalCheckFailed', index: number, payload: Error): void {
+    private trxSetErrorHandler(reason: 'ConditionalCheckFailed', payload: Error): void {
+        const index = this.items.length - 1;
         this.errorPayloads[`${reason}-${index}`] = payload;
     }
 
@@ -60,6 +61,11 @@ export abstract class DbModel<T extends Document> {
         if (!(error instanceof TransactionCanceledException)) return;
 
         error.CancellationReasons?.forEach((reason, index) => {
+            if (reason.Code === 'None') {
+                // This transaction item was successful, hence some other item failed
+                return;
+            }
+
             const key = `${reason.Code}-${index}`;
 
             if (key in this.errorPayloads) {
@@ -103,14 +109,13 @@ export abstract class DbModel<T extends Document> {
 
     /**
      * Queries for resources in a table
-     * @param pkValue The partition key value
-     * @param skValue The sort key value
+     * @param queryIndexValues Used to fill the query index
      * @param queryIndex The index to query
      * @param config The query configuration
      * @returns The resources
      */
-    protected async query( filter: Partial<T>, queryIndex: DbIndex, config: QueryConfig): Promise<PaginatedDbResult<WithTimestamps<T>[]>> {
-        const indexValues = this.buildIndexes(filter, this.indexFieldsMap, {
+    protected async query(queryIndexValues: Partial<T>, queryIndex: DbIndex, config: QueryConfig): Promise<PaginatedDbResult<WithTimestamps<T>[]>> {
+        const indexValues = this.buildIndexes(queryIndexValues, this.indexFieldsMap, {
             truncateAtFirstEmpty: config.skMatch !== 'exact',
             onlyFields: [queryIndex.partitionKey, queryIndex.sortKey],
         });
@@ -152,23 +157,22 @@ export abstract class DbModel<T extends Document> {
 
         return {
             data: items as WithTimestamps<T>[],
-            lastId: lastId,
+            lastId,
         };
     }
 
     /**
-     * Find a resource by primary key and sort key values
-     * @param pkValue The primary key value
-     * @param skValue The sort key value
-     * @param config The query configuration
+     * Find a single resource in a table
+     * @param queryIndexValues Used to fill the query index
+     * @param queryIndex The index to query
      * @returns The resource or null if not found
      */
-    protected async queryOne(filter: Partial<T>, queryIndex: DbIndex, config: QueryOneConfig): Promise<WithTimestamps<T> | null> {
-        const results = await this.query(filter, queryIndex, { ...config, limit: 1 });
+    protected async queryOne(queryIndexValues: Partial<T>, queryIndex: DbIndex, config: QueryOneConfig): Promise<WithTimestamps<T> | null> {
+        const results = await this.query(queryIndexValues, queryIndex, { ...config, limit: 1 });
         if (results.data.length === 0) return null;
 
         if (results.data.length > 1) {
-            throw new Error(`Found more than one resource for ${JSON.stringify(filter)}`);
+            throw new Error(`Found more than one resource for ${JSON.stringify(queryIndexValues)}`);
         }
 
         return results.data[0];
@@ -204,8 +208,7 @@ export abstract class DbModel<T extends Document> {
         });
 
         const error = new Error(`Failed to insert resource ${this.entityName}`);
-        const equivalentTrxPosition = this.items.length - 1;
-        this.trxSetErrorHandler('ConditionalCheckFailed', equivalentTrxPosition, error);
+        this.trxSetErrorHandler('ConditionalCheckFailed', error);
 
         return { id, createdAt, updatedAt };
     }
@@ -275,8 +278,7 @@ export abstract class DbModel<T extends Document> {
         });
 
         const error = new Error(`Failed to update resource ${this.entityName}`);
-        const equivalentTrxPosition = this.items.length - 1;
-        this.trxSetErrorHandler('ConditionalCheckFailed', equivalentTrxPosition, error);
+        this.trxSetErrorHandler('ConditionalCheckFailed', error);
     }
 
     /**
@@ -302,8 +304,7 @@ export abstract class DbModel<T extends Document> {
         });
 
         const error = new ConditionCheckError(`Failed to delete resource ${this.entityName} ${JSON.stringify(filter)}`);
-        const equivalentTrxPosition = this.items.length - 1;
-        this.trxSetErrorHandler('ConditionalCheckFailed', equivalentTrxPosition, error);
+        this.trxSetErrorHandler('ConditionalCheckFailed', error);
     }
 
     /**
@@ -326,8 +327,7 @@ export abstract class DbModel<T extends Document> {
         });
 
         const error = new UniqueContraintError(`Failed to insert unique constraint for ${this.entityName}`);
-        const equivalentTrxPosition = this.items.length - 1;
-        this.trxSetErrorHandler('ConditionalCheckFailed', equivalentTrxPosition, error);
+        this.trxSetErrorHandler('ConditionalCheckFailed', error);
     }
 
     /**
@@ -349,8 +349,7 @@ export abstract class DbModel<T extends Document> {
         });
 
         const error = new Error(`Failed to delete unique constraint for ${this.entityName} ${values.join(' ')}`);
-        const equivalentTrxPosition = this.items.length - 1;
-        this.trxSetErrorHandler('ConditionalCheckFailed', equivalentTrxPosition, error);
+        this.trxSetErrorHandler('ConditionalCheckFailed', error);
     }
 
     /**
