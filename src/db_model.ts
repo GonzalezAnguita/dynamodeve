@@ -193,7 +193,7 @@ export abstract class DbModel<T extends Document> {
         const createdAt = now;
         const updatedAt = now;
 
-        const baseData = Object.assign({ id, createdAt, updatedAt }, data);
+        const baseData = { ...data, id, createdAt, updatedAt };
 
         const indexFields = this.buildIndexes(baseData, this.indexFieldsMap, { truncateAtFirstEmpty: false });
 
@@ -326,7 +326,7 @@ export abstract class DbModel<T extends Document> {
             },
         });
 
-        const error = new UniqueContraintError(`Failed to insert unique constraint for ${this.entityName}`);
+        const error = new UniqueContraintError(`Failed to insert unique constraint for one of [${values.join(', ')}]`);
         this.trxSetErrorHandler('ConditionalCheckFailed', error);
     }
 
